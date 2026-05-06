@@ -1,0 +1,13 @@
+{
+  "// INSTRUCTIONS": "Copy this file to .vscode/settings.json in your project",
+
+  "continue.enableTabAutocomplete": true,
+  "continue.telemetryEnabled": false,
+
+  "editor.inlineSuggest.enabled": true,
+  "editor.suggest.preview": true,
+
+  "terminal.integrated.env.osx": {
+    "OLLAMA_HOST": "http://localhost:11434"
+  }
+}

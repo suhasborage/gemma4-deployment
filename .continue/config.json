@@ -1,0 +1,56 @@
+{
+  "models": [
+    {
+      "title": "Gemma 4 E4B (Local)",
+      "provider": "ollama",
+      "model": "gemma4:e4b",
+      "apiBase": "http://localhost:11434",
+      "completionOptions": {
+        "temperature": 0.7,
+        "maxTokens": 2048
+      }
+    }
+  ],
+  "tabAutocompleteModel": {
+    "title": "Gemma 4 Autocomplete",
+    "provider": "ollama",
+    "model": "gemma4:e4b",
+    "apiBase": "http://localhost:11434",
+    "completionOptions": {
+      "temperature": 0.2,
+      "maxTokens": 256
+    }
+  },
+  "customCommands": [
+    {
+      "name": "review",
+      "description": "Review the selected code for issues",
+      "prompt": "Review this code for bugs, security issues, and improvements. Be specific and actionable:\n\n{{{ input }}}"
+    },
+    {
+      "name": "explain",
+      "description": "Explain what the selected code does",
+      "prompt": "Explain this code clearly and concisely. Cover what it does, how it works, and any notable patterns:\n\n{{{ input }}}"
+    },
+    {
+      "name": "refactor",
+      "description": "Suggest refactoring improvements",
+      "prompt": "Suggest refactoring improvements for this code. Focus on readability, performance, and best practices:\n\n{{{ input }}}"
+    },
+    {
+      "name": "tests",
+      "description": "Generate unit tests for selected code",
+      "prompt": "Write comprehensive unit tests for this code. Cover edge cases and use appropriate assertions:\n\n{{{ input }}}"
+    }
+  ],
+  "contextProviders": [
+    { "name": "diff", "params": {} },
+    { "name": "open", "params": {} },
+    { "name": "terminal", "params": {} }
+  ],
+  "slashCommands": [
+    { "name": "commit", "description": "Generate a commit message" },
+    { "name": "comment", "description": "Add comments to code" },
+    { "name": "share", "description": "Export conversation as markdown" }
+  ]
+}

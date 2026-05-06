@@ -1,0 +1,8 @@
+{
+  "// INSTRUCTIONS": "Copy this file to .vscode/extensions.json in your project",
+  "recommendations": [
+    "continue.continue",
+    "ms-python.python",
+    "ms-vscode.vscode-typescript-next"
+  ]
+}

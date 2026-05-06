@@ -1,0 +1,13 @@
+{
+  "_instructions": "Rename this file to .mcp.json in your project root for Claude Code auto-discovery",
+  "mcpServers": {
+    "gemma4-local": {
+      "command": "node",
+      "args": ["mcp-server/index.js"],
+      "env": {
+        "OLLAMA_BASE_URL": "http://localhost:11434",
+        "GEMMA_MODEL": "gemma4:e4b"
+      }
+    }
+  }
+}

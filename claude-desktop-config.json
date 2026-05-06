@@ -1,0 +1,16 @@
+{
+  "_instructions": "Merge the 'mcpServers' block below into ~/Library/Application Support/Claude/claude_desktop_config.json",
+  "_location_mac": "~/Library/Application Support/Claude/claude_desktop_config.json",
+  "_location_win": "%APPDATA%\\Claude\\claude_desktop_config.json",
+  "_works_in": "Chat mode, Cowork mode, and Code mode — all share this config",
+  "mcpServers": {
+    "gemma4-local": {
+      "command": "node",
+      "args": ["/Users/sborage/work/innovation/cowork/gemma4-with-vscode/mcp-server/index.js"],
+      "env": {
+        "OLLAMA_BASE_URL": "http://localhost:11434",
+        "GEMMA_MODEL": "gemma4:e4b"
+      }
+    }
+  }
+}

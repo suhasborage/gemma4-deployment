@@ -1,0 +1,14 @@
+{
+  "_instructions": "Add to ~/.claude/settings.json OR use 'claude mcp add' OR rename mcp.json to .mcp.json in project root",
+  "_scope": "user (global) or project (auto-discovered from .mcp.json)",
+  "mcpServers": {
+    "gemma4-local": {
+      "command": "node",
+      "args": ["/Users/sborage/work/innovation/cowork/gemma4-with-vscode/mcp-server/index.js"],
+      "env": {
+        "OLLAMA_BASE_URL": "http://localhost:11434",
+        "GEMMA_MODEL": "gemma4:e4b"
+      }
+    }
+  }
+}
