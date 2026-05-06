@@ -1,8 +1,18 @@
 # Gemma 4 E4B - Local AI Model via Ollama
 # Optimized for Apple Silicon (M1/M2/M3/M4)
-# Exposes OpenAI-compatible API on http://localhost:11434
+#
+# TWO DEPLOYMENT OPTIONS:
+#   1. Unified (recommended): docker compose --profile unified up -d
+#      → Single container: Ollama + MCP Server (SSE on port 3001)
+#
+#   2. Ollama-only (original): docker compose up -d
+#      → Just Ollama; run MCP server on host via: node mcp-server/index.js
+#
+#   3. With Web UI: docker compose --profile webui up -d
+#      → Ollama + Open WebUI (ChatGPT-like interface on port 3000)
 
 services:
+  # ─── Option 1: Ollama only (original setup) ─────────────────
   ollama:
     image: ollama/ollama:latest
     container_name: gemma4-ollama
@@ -23,7 +33,6 @@ services:
     # Flash attention disabled — crashes on ARM64 CPU in Docker
     # OLLAMA_LLM_LIBRARY=cpu forces the stable CPU backend
     shm_size: '4g'
-    # No memory limit — let the VM manage allocation
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
@@ -31,9 +40,41 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
+    profiles:
+      - default
+      - webui
 
-  # OpenAI-compatible proxy (optional - Ollama already supports /v1/ endpoints)
-  # Useful if you need strict OpenAI API compatibility
+  # ─── Option 2: Unified — Ollama + MCP Server in one container ─
+  gemma4-unified:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: gemma4-unified
+    ports:
+      - "11434:11434"   # Ollama API (OpenAI-compatible)
+      - "3001:3001"     # MCP Server (SSE transport)
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      - GEMMA_MODEL=gemma4:e4b
+      - MCP_PORT=3001
+      # Ollama settings (set in Dockerfile, can override here)
+      # - OLLAMA_CONTEXT_LENGTH=4096
+      # - OLLAMA_NUM_PARALLEL=1
+    shm_size: '4g'
+    restart: unless-stopped
+    healthcheck:
+      test: >
+        curl -sf http://localhost:11434/api/tags > /dev/null &&
+        curl -sf http://localhost:3001/health > /dev/null
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    profiles:
+      - unified
+
+  # ─── Optional: Open WebUI (ChatGPT-like interface) ──────────
   openai-proxy:
     image: ghcr.io/open-webui/open-webui:main
     container_name: gemma4-webui
@@ -50,7 +91,7 @@ services:
       - webui_data:/app/backend/data
     restart: unless-stopped
     profiles:
-      - webui  # Only starts with: docker compose --profile webui up
+      - webui
 
 volumes:
   ollama_data:

@@ -1,0 +1,16 @@
+# Files to exclude from Cloud Build upload
+.git
+.gitignore
+node_modules
+mcp-server/node_modules
+.continue
+vscode-settings
+examples
+docs
+*.md
+!mcp-server/*.md
+*.pptx
+*.pdf
+*.docx
+*.jpg
+*.png

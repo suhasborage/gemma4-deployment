@@ -1,0 +1,36 @@
+# Exclude from Docker build context
+# Only Dockerfile, mcp-server/*, and scripts/docker-entrypoint.sh are needed
+
+.git
+.gitignore
+.gcloudignore
+.continue
+node_modules
+mcp-server/node_modules
+
+# Docs and configs not needed in image
+docs/
+examples/
+vscode-settings/
+*.md
+*.pdf
+*.docx
+*.pptx
+*.jpg
+*.png
+
+# Compose/config files (not needed inside image)
+docker-compose.yml
+docker-compose.override.yml
+cloudbuild.yaml
+claude-*.json
+mcp.json
+
+# Keep these (explicit allowlist via negation)
+!Dockerfile
+!.dockerignore
+!mcp-server/package.json
+!mcp-server/package-lock.json
+!mcp-server/index.js
+!mcp-server/index-sse.js
+!scripts/docker-entrypoint.sh
