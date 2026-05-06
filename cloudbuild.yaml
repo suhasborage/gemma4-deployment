@@ -1,18 +1,15 @@
 # ─────────────────────────────────────────────────────────────
-# cloudbuild.yaml — Build & push Gemma 4 E4B unified image
+# cloudbuild.yaml — Build & deploy Gemma 4 E4B to GCE VM
 #
-# Trigger setup in Cloud Build:
-#   Source:           Your Git repo
-#   Build config:     /cloudbuild.yaml (this file)
-#   Included files:   Dockerfile, mcp-server/**, scripts/**
+# NOT Cloud Run — Ollama needs persistent storage + long startup.
+# This deploys to a dedicated GCE VM instead.
 #
-# Manual run:
-#   gcloud builds submit --config=cloudbuild.yaml .
+# Prerequisites (run once):
+#   ./scripts/gcp-setup.sh
 #
-# What it does:
-#   1. Builds the unified Docker image (Ollama + MCP server)
-#   2. Pushes to Artifact Registry
-#   3. Deploys to GCE VM via container-optimized OS
+# Manual trigger:
+#   gcloud builds submit --config=cloudbuild.yaml \
+#     --project=$PROJECT_ID .
 # ─────────────────────────────────────────────────────────────
 
 substitutions:
@@ -45,25 +42,53 @@ steps:
       - '--all-tags'
       - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_ARTIFACT_REPO}/${_IMAGE_NAME}'
 
-  # ─── Step 2: Deploy to GCE VM ─────────────────────────────
-  # Updates the running container on the VM
+  # ─── Step 2: Create or update GCE VM ───────────────────────
   - name: 'gcr.io/cloud-builders/gcloud'
     id: 'Deploy'
     entrypoint: 'bash'
     args:
       - '-c'
       - |
-        # Check if VM exists
+        set -e
+        IMAGE="${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_ARTIFACT_REPO}/${_IMAGE_NAME}:latest"
+
+        echo "=== Gemma 4 GCE Deployment ==="
+        echo "Image: $${IMAGE}"
+        echo "VM:    ${_VM_NAME} (${_ZONE})"
+
+        # ── Check if VM exists ──
         if gcloud compute instances describe ${_VM_NAME} \
             --zone=${_ZONE} --format="value(name)" 2>/dev/null; then
-          echo "VM exists — updating container..."
+
+          echo ""
+          echo ">>> VM exists — updating container..."
+
+          # Ensure VM is running
+          STATUS=$$(gcloud compute instances describe ${_VM_NAME} \
+              --zone=${_ZONE} --format="value(status)")
+          if [ "$$STATUS" != "RUNNING" ]; then
+            echo "    VM is $$STATUS — starting it..."
+            gcloud compute instances start ${_VM_NAME} --zone=${_ZONE}
+            sleep 30
+          fi
+
+          # SSH in and update container
           gcloud compute ssh ${_VM_NAME} \
             --zone=${_ZONE} \
             --tunnel-through-iap \
             --command="
-              sudo docker pull ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_ARTIFACT_REPO}/${_IMAGE_NAME}:latest
+              set -e
+              echo 'Configuring Artifact Registry auth...'
+              sudo gcloud auth configure-docker ${_REGION}-docker.pkg.dev --quiet 2>/dev/null || true
+
+              echo 'Pulling latest image...'
+              sudo docker pull $${IMAGE}
+
+              echo 'Stopping old container...'
               sudo docker stop gemma4-unified 2>/dev/null || true
               sudo docker rm gemma4-unified 2>/dev/null || true
+
+              echo 'Starting new container...'
               sudo docker run -d \
                 --name gemma4-unified \
                 --restart unless-stopped \
@@ -73,17 +98,75 @@ steps:
                 -v ollama_data:/root/.ollama \
                 -e OLLAMA_FLASH_ATTENTION=true \
                 -e OLLAMA_CONTEXT_LENGTH=8192 \
-                ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_ARTIFACT_REPO}/${_IMAGE_NAME}:latest
-              echo 'Container updated and running'
+                -e OLLAMA_LLM_LIBRARY=cpu \
+                $${IMAGE}
+
+              echo 'Waiting for services...'
+              for i in \$$(seq 1 120); do
+                if curl -sf http://localhost:11434/api/tags >/dev/null 2>&1 && \
+                   curl -sf http://localhost:3001/health >/dev/null 2>&1; then
+                  echo \"Services ready after \$${i}s\"
+                  curl -sf http://localhost:3001/health
+                  break
+                fi
+                [ \$$((i % 15)) -eq 0 ] && echo \"  Still starting... (\$${i}s)\"
+                [ \$$i -eq 120 ] && echo 'Warning: services not ready after 120s'
+                sleep 1
+              done
+
+              echo ''
+              sudo docker ps --filter name=gemma4-unified --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'
             "
+
         else
-          echo "VM does not exist — create it first with gcp-deploy.sh"
-          echo "Or create manually:"
-          echo "  gcloud compute instances create ${_VM_NAME} \\"
-          echo "    --zone=${_ZONE} --machine-type=${_MACHINE_TYPE} \\"
-          echo "    --boot-disk-size=50GB --image-family=ubuntu-2204-lts \\"
-          echo "    --image-project=ubuntu-os-cloud --no-address --tags=gemma4-iap"
+          echo ""
+          echo ">>> VM does not exist — creating ${_VM_NAME}..."
+
+          # Create VM with Docker pre-installed via startup script
+          gcloud compute instances create ${_VM_NAME} \
+            --zone=${_ZONE} \
+            --machine-type=${_MACHINE_TYPE} \
+            --boot-disk-size=50GB \
+            --boot-disk-type=pd-ssd \
+            --image-family=ubuntu-2204-lts \
+            --image-project=ubuntu-os-cloud \
+            --no-address \
+            --tags=gemma4-iap \
+            --scopes=default,storage-ro \
+            --metadata=startup-script='#!/bin/bash
+              exec > /var/log/gemma4-startup.log 2>&1
+              set -e
+              # Install Docker
+              curl -fsSL https://get.docker.com | sh
+              apt-get install -y -qq docker-compose-plugin
+              systemctl enable docker && systemctl start docker
+              # Auth to Artifact Registry
+              gcloud auth configure-docker ${_REGION}-docker.pkg.dev --quiet
+              # Pull and run
+              docker pull '"$${IMAGE}"'
+              docker run -d \
+                --name gemma4-unified \
+                --restart unless-stopped \
+                --shm-size=4g \
+                -p 11434:11434 \
+                -p 3001:3001 \
+                -v ollama_data:/root/.ollama \
+                -e OLLAMA_FLASH_ATTENTION=true \
+                -e OLLAMA_CONTEXT_LENGTH=8192 \
+                -e OLLAMA_LLM_LIBRARY=cpu \
+                '"$${IMAGE}"'
+              echo "Gemma 4 container started"
+            '
+
+          echo "VM created. First boot installs Docker + pulls image (~3-5 min)."
+          echo "Connect via: gcloud compute ssh ${_VM_NAME} --zone=${_ZONE} --tunnel-through-iap"
         fi
+
+        echo ""
+        echo "=== Deployment complete ==="
+        echo "Connect: ./scripts/gcp-deploy.sh --connect"
+        echo "  Then: http://localhost:11434 (Ollama)"
+        echo "  Then: http://localhost:3001/sse (MCP)"
 
 images:
   - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_ARTIFACT_REPO}/${_IMAGE_NAME}:${SHORT_SHA}'
